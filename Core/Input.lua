@@ -29,44 +29,57 @@ function Input.CaptureNextKey(callback)
 end
 
 function Input.MakeDraggable(frame, dragBar)
-    local dragging = false
-    local startPos
-    local startInput
+	local dragging = false
+	local startMouse
+	local startPos
 
-    local function update(input)
-        if not dragging then
-            return
-        end
-        local delta = input.Position - startInput.Position
-        frame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset + delta.X, frame.Position.Y.Scale, frame.Position.Y.Offset + delta.Y)
-    end
+	local moveConn, endConn
 
-    dragBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            startInput = input
-            startPos = frame.Position
-        end
-    end)
+	local function stop()
+		dragging = false
+		if moveConn then moveConn:Disconnect(); moveConn = nil end
+		if endConn then endConn:Disconnect(); endConn = nil end
+	end
 
-    dragBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
+	dragBar.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
 
-    dragBar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            startInput = startInput or input
-            update(input)
-        end
-    end)
+		dragging = true
+		startMouse = input.Position
+		startPos = frame.Position
 
-    UserInputService.InputChanged:Connect(function(input)
-        if input == startInput and dragging then
-            update(input)
-        end
-    end)
+		-- track globally so drag continues even off the bar
+		moveConn = UserInputService.InputChanged:Connect(function(i)
+			if not dragging then return end
+			if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+
+			local delta = i.Position - startMouse
+			frame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end)
+
+		endConn = UserInputService.InputEnded:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				stop()
+			end
+		end)
+	end)
+
+	-- safety: if destroyed while dragging
+	frame.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			stop()
+		end
+	end)
 end
+
 
 return Input
